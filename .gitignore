@@ -1,3 +1,4 @@
 uploads/*
 *.out
 *.txt
+!requirements.txt
