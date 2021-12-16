@@ -10,10 +10,10 @@ from werkzeug.datastructures import FileStorage
 import pandas as pd
 import numpy as np
 import json
+import uuid
 
-
-def run_shell_script(script, vcf, snp_list):
-    stdout = subprocess.run([script, vcf, snp_list],capture_output=True).stdout.decode('utf-8')
+def run_shell_script(script, vcf, snp_list, uid):
+    stdout = subprocess.run([script, vcf, snp_list, uid],capture_output=True).stdout.decode('utf-8')
     return stdout
 
 app = Flask(__name__)
@@ -22,63 +22,26 @@ CORS(app)
 UPLOAD_FOLDER = 'uploads/'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-
-#I assume that the fetch request will be in this type of format
-# // Select your input type file and store it in a variable
-# const input = document.getElementById('fileinput');
-
-# // This will upload the file after having read it
-# const upload = (file) => {
-#   fetch('http://www.example.net', { // Your POST endpoint
-#     method: 'POST',
-#     headers: {
-#       // Content-Type may need to be completely **omitted**
-#       // or you may need something
-#       "Content-Type": "You will perhaps need to define a content-type here"
-#     },
-#     body: file // This is your file object
-#   }).then(
-#     response => response.json() // if the response is a JSON object
-#   ).then(
-#     success => console.log(success) // Handle the success response object
-#   ).catch(
-#     error => console.log(error) // Handle the error response object
-#   );
-# };
-
-
 @app.route('/api/parsevcf', methods=['GET', 'POST'])
 def parsevcf():
     if request.method == 'POST':
         file = request.data
-        filename = 'user.vcf'
+        uid = str(uuid.uuid4())
+        filename = uid + '.vcf'
         # if user does not select file, browser also
         # submit an empty part without filename
         if file:
             with open(os.path.join(app.config['UPLOAD_FOLDER'], filename), 'wb') as f: 
                 f.write(file)
             filename = secure_filename(filename)
-            run_shell_script('./grabProjectSNPs.sh',os.path.join(app.config['UPLOAD_FOLDER'], filename), "SNPs.txt")
-            results = pd.read_csv("results.txt", sep='\t', header=None)
-            print(results)
-            os.remove("myProjectSNPs.out")
-            os.remove("projectGenotype.out")
-            os.remove("refProjectGenotype.out")
-            os.remove("onlyRefProjectSNPs.txt")
+            run_shell_script('./grabProjectSNPs.sh',os.path.join(app.config['UPLOAD_FOLDER'], filename), uid + "SNPs.txt", uid)
+            results = pd.read_csv(uid + "results.txt", sep='\t', header=None)
+            os.remove(uid + "myProjectSNPs.out")
+            os.remove(uid + "projectGenotype.out")
+            os.remove(uid + "refProjectGenotype.out")
+            os.remove(uid + "onlyRefProjectSNPs.txt")
             return Response(results.to_json(orient ="records"), mimetype='application/json')
 
-
-#below for testing
-
-# @app.route("/testing",methods=['GET',])
-# def testingRun():
-#     run_shell_script('./grabProjectSNPs.sh',"/Users/gabriellealtman/Downloads/gaby_VCF.vcf.gz", "SNPs.txt")
-#     results = pd.read_csv("results.txt", sep='\t', header=None)
-#     print(results)
-#     # os.remove("myProjectSNPs.out")
-#     # os.remove("projectGenotype.out")
-#     # os.remove("refProjectGenotype.out")
-#     # os.remove("onlyRefProjectSNPs.txt")
-#     return Response(results.to_json(orient ="records"), mimetype='application/json')
-
-app.run(debug=True)
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(port=port)
